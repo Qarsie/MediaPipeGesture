@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+*.h5
+.env
+
+# VS Code
+.vscode/
+
+# Other
+*.log
+.DS_Store
