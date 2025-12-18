@@ -1,0 +1,21 @@
+# Development override - use with:
+# docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Mount source code for hot reload
+      - ./main.py:/app/main.py:ro
+      - ./realtime_predict.py:/app/realtime_predict.py:ro
+      - ./utils:/app/utils:ro
+    environment:
+      - DEBUG=true
+    ports:
+      - "8000:8000"
+    # Override CMD for development with auto-reload
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
