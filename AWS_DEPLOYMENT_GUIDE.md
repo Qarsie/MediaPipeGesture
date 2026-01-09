@@ -70,14 +70,14 @@ docker compose down
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    AWS Cloud (us-east-1)                         │
+│                    AWS Cloud (ap-southeast-1)                     │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │                   VPC (10.0.0.0/16)                        │  │
 │  │  ┌─────────────────────────────────────────────────────┐  │  │
 │  │  │              Public Subnet (10.0.1.0/24)             │  │  │
 │  │  │                                                       │  │  │
 │  │  │  ┌─────────────────────────────────────────────┐     │  │  │
-│  │  │  │            EC2 Instance (t3.medium)          │     │  │  │
+│  │  │  │            EC2 Instance (m7i-flex.large)       │     │  │  │
 │  │  │  │  ┌───────────────┐  ┌─────────────────────┐ │     │  │  │
 │  │  │  │  │    Nginx      │  │   ASL API (Docker)  │ │     │  │  │
 │  │  │  │  │  :80 / :443   │──│      :8000          │ │     │  │  │
@@ -137,7 +137,7 @@ aws iam create-access-key --user-name asl-deployer
 # Create ECR repository
 aws ecr create-repository \
     --repository-name asl-recognition-api \
-    --region us-east-1 \
+    --region ap-southeast-1 \
     --image-scanning-configuration scanOnPush=true
 
 # Get the repository URI (save this!)
@@ -147,7 +147,7 @@ aws ecr describe-repositories \
     --output text
 ```
 
-**Example Output:** `123456789012.dkr.ecr.us-east-1.amazonaws.com/asl-recognition-api`
+**Example Output:** `123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/asl-recognition-api`
 
 ### 3. Launch EC2 Instance
 
@@ -155,9 +155,10 @@ aws ecr describe-repositories \
 
 1. Go to **EC2 Dashboard** → **Launch Instance**
 2. Configure:
+
    - **Name**: `asl-api-server`
    - **AMI**: Amazon Linux 2023 (or Ubuntu 22.04)
-   - **Instance Type**: `t3.medium` (2 vCPU, 4GB RAM)
+   - **Instance Type**: `m7i-flex.large` (2 vCPU, 8GB RAM)
    - **Key Pair**: Create new or select existing
    - **Network Settings**:
      - Allow SSH (port 22) from your IP
@@ -199,7 +200,7 @@ aws ec2 authorize-security-group-ingress \
 # Launch instance
 aws ec2 run-instances \
     --image-id ami-0c7217cdde317cfec \
-    --instance-type t3.medium \
+    --instance-type m7i-flex.large \
     --key-name asl-api-key \
     --security-groups asl-api-sg \
     --block-device-mappings '[{"DeviceName":"/dev/xvda","Ebs":{"VolumeSize":30,"VolumeType":"gp3"}}]' \
@@ -210,12 +211,12 @@ aws ec2 run-instances \
 
 Ensure these ports are open:
 
-| Port | Protocol | Source | Purpose |
-|------|----------|--------|---------|
-| 22 | TCP | Your IP | SSH access |
-| 80 | TCP | 0.0.0.0/0 | HTTP traffic |
-| 443 | TCP | 0.0.0.0/0 | HTTPS traffic |
-| 8000 | TCP | VPC only | API (internal) |
+| Port | Protocol | Source    | Purpose        |
+| ---- | -------- | --------- | -------------- |
+| 22   | TCP      | Your IP   | SSH access     |
+| 80   | TCP      | 0.0.0.0/0 | HTTP traffic   |
+| 443  | TCP      | 0.0.0.0/0 | HTTPS traffic  |
+| 8000 | TCP      | VPC only  | API (internal) |
 
 ---
 
@@ -296,7 +297,7 @@ sudo ./aws/install
 
 # Configure AWS CLI
 aws configure
-# Enter your Access Key ID, Secret Access Key, region (us-east-1), and output format (json)
+# Enter your Access Key ID, Secret Access Key, region (ap-southeast-1), and output format (json)
 ```
 
 ### 4. Deploy Application
@@ -307,7 +308,7 @@ mkdir -p ~/asl-api
 cd ~/asl-api
 
 # Login to ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
+aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin YOUR_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com
 ```
 
 Create `docker-compose.prod.yml` on the EC2 instance:
@@ -318,13 +319,13 @@ version: '3.8'
 
 services:
   api:
-    image: YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/asl-recognition-api:latest
+    image: 079079338393.dkr.ecr.ap-southeast-1.amazonaws.com/asl-recognition-api:latest
     container_name: asl-api
     restart: unless-stopped
     environment:
       - TF_CPP_MIN_LOG_LEVEL=2
       - PYTHONUNBUFFERED=1
-      - ALLOWED_ORIGINS=https://your-vercel-app.vercel.app,http://localhost:3000
+      - ALLOWED_ORIGINS=https://sign-bridge-snowy.vercel.app,http://localhost:3000
     expose:
       - "8000"
     healthcheck:
@@ -384,7 +385,7 @@ events {
 http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
-    
+
     log_format main '$remote_addr - $remote_user [$time_local] "$request" '
                     '$status $body_bytes_sent "$http_referer" '
                     '"$http_user_agent"';
@@ -424,7 +425,7 @@ http {
 
         location /predict-image/ {
             limit_req zone=api_limit burst=20 nodelay;
-            
+
             proxy_pass http://asl_api;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
@@ -461,16 +462,16 @@ Push your Docker image from local machine first:
 # On your local machine
 
 # Login to ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
+aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin YOUR_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com
 
 # Build the image
 docker build -t asl-recognition-api .
 
 # Tag for ECR
-docker tag asl-recognition-api:latest YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/asl-recognition-api:latest
+docker tag asl-recognition-api:latest YOUR_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com/asl-recognition-api:latest
 
 # Push to ECR
-docker push YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/asl-recognition-api:latest
+docker push YOUR_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com/asl-recognition-api:latest
 ```
 
 Then on EC2:
@@ -501,7 +502,10 @@ curl http://YOUR_EC2_PUBLIC_IP/health
 
 ---
 
-## 🔐 Domain & SSL Setup
+## 🔐 Domain & SSL Setup (Optional)
+
+> **Note:** If you're using the **API Proxy Pattern** (recommended), you **don't need SSL** on EC2!
+> The proxy handles HTTPS on Vercel's side. Skip this section unless you need a custom domain.
 
 ### 1. Configure Domain (Route 53 or External DNS)
 
@@ -593,13 +597,13 @@ Go to your repository → **Settings** → **Secrets and variables** → **Actio
 
 Add these secrets:
 
-| Secret Name | Value |
-|-------------|-------|
-| `AWS_ACCESS_KEY_ID` | Your IAM access key |
-| `AWS_SECRET_ACCESS_KEY` | Your IAM secret key |
-| `ECR_REGISTRY` | `123456789012.dkr.ecr.us-east-1.amazonaws.com` |
-| `EC2_INSTANCE_ID` | `i-0abc123def456789` |
-| `EC2_PUBLIC_IP` | `12.34.56.78` |
+| Secret Name             | Value                                          |
+| ----------------------- | ---------------------------------------------- |
+| `AWS_ACCESS_KEY_ID`     | Your IAM access key                            |
+| `AWS_SECRET_ACCESS_KEY` | Your IAM secret key                            |
+| `ECR_REGISTRY`          | `123456789012.dkr.ecr.us-east-1.amazonaws.com` |
+| `EC2_INSTANCE_ID`       | `i-0abc123def456789`                           |
+| `EC2_PUBLIC_IP`         | `12.34.56.78`                                  |
 
 ### 2. Workflow File
 
@@ -752,7 +756,7 @@ sudo swapon /swapfile
 
 ```bash
 # Re-authenticate
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
+aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin YOUR_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com
 
 # Check credentials
 aws sts get-caller-identity
@@ -795,30 +799,29 @@ docker network inspect asl-api_asl-network
 
 ## 💰 Cost Estimation
 
-### EC2 Costs (us-east-1)
+### EC2 Costs (ap-southeast-1)
 
-| Instance Type | vCPU | RAM | On-Demand/Month | Reserved/Month |
-|--------------|------|-----|-----------------|----------------|
-| t3.small | 2 | 2GB | ~$15 | ~$10 |
-| t3.medium | 2 | 4GB | ~$30 | ~$20 |
-| t3.large | 2 | 8GB | ~$60 | ~$40 |
-| t3.xlarge | 4 | 16GB | ~$120 | ~$80 |
+| Instance Type  | vCPU | RAM | On-Demand/Month | Notes               |
+| -------------- | ---- | --- | --------------- | ------------------- |
+| t3.micro       | 2    | 1GB | ~$8             | ❌ Too small for ML |
+| t3.small       | 2    | 2GB | ~$15            | ❌ Risky for ML     |
+| c7i.flex-large | 2    | 4GB | ~$35            | ✅ Workable         |
+| m7i-flex.large | 2    | 8GB | ~$45            | ✅ **Recommended**  |
 
 ### Additional Costs
 
-| Service | Estimated Cost |
-|---------|----------------|
-| ECR Storage | ~$0.10/GB/month |
-| Data Transfer (out) | ~$0.09/GB |
-| Elastic IP | Free (if attached) |
-| Route 53 | ~$0.50/hosted zone |
-| SSL (Let's Encrypt) | Free |
+| Service             | Estimated Cost     |
+| ------------------- | ------------------ |
+| ECR Storage         | ~$0.10/GB/month    |
+| Data Transfer (out) | ~$0.09/GB          |
+| Elastic IP          | Free (if attached) |
+| Route 53            | ~$0.50/hosted zone |
+| SSL (Let's Encrypt) | Free               |
 
 ### Recommended for Your Use Case
 
-**Starting Out (Low Traffic):** t3.small (~$15/month)
-**Production (Moderate Traffic):** t3.medium (~$30/month)
-**High Performance:** t3.large (~$60/month)
+**Recommended:** m7i-flex.large (~$45/month) - Best for TensorFlow + MediaPipe
+**Budget Option:** c7i.flex-large (~$35/month) - Works but monitor memory usage
 
 ---
 
@@ -871,108 +874,126 @@ ALLOWED_ORIGINS = [
 
 ## 🔗 Connect from Next.js (Vercel)
 
-### Environment Variables
+### Important: Use API Proxy Pattern
 
-In your Vercel project settings, add:
+Since Vercel uses HTTPS and EC2 uses HTTP, browsers will block direct calls (mixed content).
+**Solution:** Create an API route in Next.js that proxies requests to EC2 server-side.
+
+```
+Browser → Vercel API (HTTPS) → EC2 (HTTP) → Response
+       ✅ No mixed content issues!
+```
+
+### 1. Environment Variables
+
+**In Vercel Dashboard** (Settings → Environment Variables):
+
+| Name         | Value                  |
+| ------------ | ---------------------- |
+| `ML_API_URL` | `http://54.169.39.128` |
+
+**In `.env.local`** (for local development):
 
 ```env
-NEXT_PUBLIC_ASL_API_URL=https://api.yourdomain.com
-# OR for HTTP during development
-NEXT_PUBLIC_ASL_API_URL=http://YOUR_EC2_PUBLIC_IP
+# Server-side API URL (used by API proxy route)
+ML_API_URL=http://54.169.39.128
 ```
 
-### API Client Example
+> **Note:** This is a server-side variable (no `NEXT_PUBLIC_` prefix), so it's not exposed to the browser.
+
+### 2. Create API Proxy Route
+
+Create `src/app/api/ml/predict/route.ts`:
 
 ```typescript
-// lib/asl-api.ts
+import { NextRequest, NextResponse } from "next/server";
 
-const API_URL = process.env.NEXT_PUBLIC_ASL_API_URL;
+// EC2 ML API URL (server-side, no CORS/mixed content issues)
+const ML_API_URL = process.env.ML_API_URL || "http://54.169.39.128";
 
-export async function predictImage(imageFile: File): Promise<{
-  label: string;
-  confidence: number;
-}> {
-  const formData = new FormData();
-  formData.append('file', imageFile);
+export async function POST(request: NextRequest) {
+  try {
+    const formData = await request.formData();
 
-  const response = await fetch(`${API_URL}/predict-image/`, {
-    method: 'POST',
-    body: formData,
-  });
+    // Forward the request to EC2 ML API
+    const response = await fetch(`${ML_API_URL}/predict-image/`, {
+      method: "POST",
+      body: formData,
+    });
 
-  if (!response.ok) {
-    throw new Error('Prediction failed');
-  }
-
-  return response.json();
-}
-
-export function createWebSocket(): WebSocket {
-  const wsUrl = API_URL?.replace('http', 'ws') + '/ws/recognize';
-  return new WebSocket(wsUrl);
-}
-```
-
-### React Hook Example
-
-```typescript
-// hooks/useASLRecognition.ts
-import { useEffect, useRef, useState, useCallback } from 'react';
-
-export function useASLRecognition() {
-  const wsRef = useRef<WebSocket | null>(null);
-  const [prediction, setPrediction] = useState<{
-    label: string | null;
-    confidence: number;
-  }>({ label: null, confidence: 0 });
-  const [isConnected, setIsConnected] = useState(false);
-
-  const connect = useCallback(() => {
-    const wsUrl = process.env.NEXT_PUBLIC_ASL_API_URL?.replace('http', 'ws') + '/ws/recognize';
-    wsRef.current = new WebSocket(wsUrl);
-
-    wsRef.current.onopen = () => setIsConnected(true);
-    wsRef.current.onclose = () => setIsConnected(false);
-    wsRef.current.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.success) {
-        setPrediction({ label: data.label, confidence: data.confidence });
-      }
-    };
-  }, []);
-
-  const sendFrame = useCallback((base64Image: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(base64Image);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("ML API error:", errorText);
+      return NextResponse.json(
+        { error: "ML API request failed", details: errorText },
+        { status: response.status }
+      );
     }
-  }, []);
 
-  const disconnect = useCallback(() => {
-    wsRef.current?.close();
-  }, []);
-
-  return { prediction, isConnected, connect, sendFrame, disconnect };
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Error calling ML API:", error);
+    return NextResponse.json(
+      { error: "Failed to connect to ML API" },
+      { status: 500 }
+    );
+  }
 }
+```
+
+### 3. Call the Proxy from Frontend
+
+In your component (e.g., `CameraCapture.tsx`):
+
+```typescript
+// Call Vercel API proxy to avoid mixed content issues
+const res = await fetch("/api/ml/predict", {
+  method: "POST",
+  body: formData,
+});
+
+const data = await res.json();
+if (data.success && data.label) {
+  setPrediction(`${data.label} (${(data.confidence * 100).toFixed(1)}%)`);
+}
+```
+
+### Why This Works
+
+| Connection       | Protocol | Status                                        |
+| ---------------- | -------- | --------------------------------------------- |
+| Browser → Vercel | HTTPS    | ✅ Secure                                     |
+| Vercel → EC2     | HTTP     | ✅ Server-to-server (no browser restrictions) |
+
+**No SSL certificate needed on EC2!**
+
 ```
 
 ---
 
 ## ✅ Deployment Checklist
 
+### AWS Setup
 - [ ] AWS Account created and IAM user configured
 - [ ] ECR repository created
-- [ ] EC2 instance launched with correct instance type
+- [ ] EC2 instance launched with correct instance type (m7i-flex.large recommended)
 - [ ] Security groups configured (22, 80, 443)
 - [ ] Docker and Docker Compose installed on EC2
 - [ ] AWS CLI configured on EC2
 - [ ] Application deployed and running
 - [ ] Health check passing (`/health` returns 200)
-- [ ] Domain configured (optional)
-- [ ] SSL certificate installed (optional)
-- [ ] GitHub Actions secrets configured
-- [ ] CI/CD pipeline tested
-- [ ] CORS configured for your Vercel domain
-- [ ] Next.js environment variables set
+
+### Vercel Integration (API Proxy Pattern)
+- [ ] Created `src/app/api/ml/predict/route.ts` proxy route
+- [ ] Updated frontend to call `/api/ml/predict`
+- [ ] Added `ML_API_URL` environment variable in Vercel
+- [ ] Deployed and tested on phone/other devices
+
+### Optional
+- [ ] Domain configured
+- [ ] SSL certificate installed
+- [ ] GitHub Actions CI/CD configured
 - [ ] Monitoring and logging set up
 
 ---
@@ -999,3 +1020,4 @@ If you encounter issues:
 ---
 
 **Good luck with your deployment! 🎉**
+```
