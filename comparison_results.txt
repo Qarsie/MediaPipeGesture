@@ -1,0 +1,16 @@
+================================================================================
+MODEL COMPARISON RESULTS: CNN with PSO vs CNN without PSO
+================================================================================
+
+CNN (Default/No PSO):
+  - Test Accuracy: 99.0947%
+  - Errors: 11
+
+CNN + PSO Optimized:
+  - Test Accuracy: 99.6708%
+  - Errors: 4
+
+Improvement:
+  - Absolute: +0.5761%
+  - Relative: +0.5814%
+  - Errors Prevented: 7
